@@ -6,14 +6,12 @@ import { Octokit } from "@octokit/rest";
 
 const app = express();
 
-// 1. Bulletproof CORS & Logging Middleware
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.url}`);
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-custom-header");
   
-  // Instantly approve CORS preflight checks
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -56,7 +54,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 let transport = null;
 
-// 2. The exact SSE route Gemini needs
 app.get("/sse", async (req, res) => {
   console.log("[SSE] New connection initializing...");
   transport = new SSEServerTransport("/messages", res);
@@ -64,7 +61,6 @@ app.get("/sse", async (req, res) => {
   console.log("[SSE] Connection established.");
 });
 
-// 3. The exact POST route for messages
 app.post("/messages", async (req, res) => {
   console.log("[POST] Message received.");
   if (transport) {
@@ -76,6 +72,10 @@ app.post("/messages", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send("GitHub MCP SSE Server Running");
+});
+
+app.get("/.well-known/*", (req, res) => {
+  res.status(200).json({});
 });
 
 app.listen(port, "0.0.0.0", () => {
