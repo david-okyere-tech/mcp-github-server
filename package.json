@@ -1,10 +1,13 @@
 {
   "name": "mcp-github-server",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "start": "mcp-server-github --transport sse"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-github": "latest"
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@octokit/rest": "^20.1.1",
+    "express": "^4.19.2"
   }
 }
