@@ -19,6 +19,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const port = process.env.PORT || 8080;
 const octokit = new Octokit({ auth: process.env.GITHUB_PERSONAL_ACCESS_TOKEN });
@@ -74,8 +75,34 @@ app.get("/", (req, res) => {
   res.send("GitHub MCP SSE Server Running");
 });
 
-app.get("/.well-known/*", (req, res) => {
-  res.status(200).json({});
+// --- FAKE OAUTH FLOW FOR GEMINI ---
+
+// 1. Tell Gemini where the fake auth endpoints are
+app.get(["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/sse"], (req, res) => {
+  const baseUrl = `https://${req.headers.host}`;
+  res.status(200).json({
+    authorization_endpoint: `${baseUrl}/auth`,
+    token_endpoint: `${baseUrl}/token`,
+    scopes_supported: ["all"]
+  });
+});
+
+// 2. Catch the browser redirect and instantly redirect back to Gemini with a fake code
+app.get("/auth", (req, res) => {
+  const redirectUri = req.query.redirect_uri;
+  const state = req.query.state;
+  console.log(`[OAUTH] Authorize requested. Redirecting back to: ${redirectUri}`);
+  res.redirect(`${redirectUri}?code=mock_auth_code_123&state=${state}`);
+});
+
+// 3. Give Gemini a fake access token when it trades in the code
+app.post("/token", (req, res) => {
+  console.log("[OAUTH] Token requested. Sending mock token.");
+  res.status(200).json({
+    access_token: "mock_access_token_456",
+    token_type: "Bearer",
+    expires_in: 3600
+  });
 });
 
 app.listen(port, "0.0.0.0", () => {
