@@ -24,14 +24,22 @@ function buildServer() {
 const app = express();
 app.use(express.json());
 
-// Stateless: a fresh server+transport per request. Simplest thing that works.
 app.post("/mcp", async (req, res) => {
-  const server = buildServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => { transport.close(); server.close(); });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+  console.log("[POST /mcp] Accept:", req.headers.accept);
+  console.log("[POST /mcp] Body:", JSON.stringify(req.body));
+  try {
+    const server = buildServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on("close", () => { transport.close(); server.close(); });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+    console.log("[POST /mcp] handled, status:", res.statusCode);
+  } catch (err) {
+    console.error("[POST /mcp] ERROR:", err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
 });
+
 app.get("/mcp", (req, res) => res.status(405).end());
 app.delete("/mcp", (req, res) => res.status(405).end());
 
