@@ -1,10 +1,14 @@
 import express from "express";
+import cors from "cors";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { Octokit } from "@octokit/rest";
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+
 const port = process.env.PORT || 8080;
 const octokit = new Octokit({ auth: process.env.GITHUB_PERSONAL_ACCESS_TOKEN });
 
@@ -68,9 +72,9 @@ app.get("/sse", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   if (transport) {
-    await transport.handlePostMessage(req, res);
+    await transport.handlePostMessage(req, res, req.body);
   } else {
-    res.status(400).send("No active SSE connection");
+    res.status(400).send("No active SSE session");
   }
 });
 
@@ -78,6 +82,6 @@ app.get("/", (req, res) => {
   res.send("GitHub MCP SSE Server Running");
 });
 
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`Server listening on port ${port}`);
 });
