@@ -1,12 +1,25 @@
 import express from "express";
-import cors from "cors";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { Octokit } from "@octokit/rest";
 
 const app = express();
-app.use(cors());
+
+// 1. Bulletproof CORS & Logging Middleware
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.url}`);
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-custom-header");
+  
+  // Instantly approve CORS preflight checks
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json());
 
 const port = process.env.PORT || 8080;
@@ -23,54 +36,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "list_repositories",
       description: "List repositories for authenticated user",
       inputSchema: { type: "object", properties: {} }
-    },
-    {
-      name: "get_file_contents",
-      description: "Get contents of a file in a GitHub repo",
-      inputSchema: {
-        type: "object",
-        properties: {
-          owner: { type: "string" },
-          repo: { type: "string" },
-          path: { type: "string" }
-        },
-        required: ["owner", "repo", "path"]
-      }
     }
   ]
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  try {
-    if (name === "list_repositories") {
-      const res = await octokit.rest.repos.listForAuthenticatedUser({ per_page: 20 });
+  const { name } = request.params;
+  if (name === "list_repositories") {
+    try {
+      const res = await octokit.rest.repos.listForAuthenticatedUser({ per_page: 10 });
       return {
-        content: [{ type: "text", text: JSON.stringify(res.data.map(r => ({ name: r.name, full_name: r.full_name, url: r.html_url }))) }]
+        content: [{ type: "text", text: JSON.stringify(res.data.map(r => r.full_name)) }]
       };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: err.message }] };
     }
-    if (name === "get_file_contents") {
-      const res = await octokit.rest.repos.getContent({
-        owner: args.owner,
-        repo: args.repo,
-        path: args.path
-      });
-      const content = Buffer.from(res.data.content, "base64").toString("utf-8");
-      return { content: [{ type: "text", text: content }] };
-    }
-  } catch (err) {
-    return { isError: true, content: [{ type: "text", text: err.message }] };
   }
 });
 
 let transport = null;
 
+// 2. The exact SSE route Gemini needs
 app.get("/sse", async (req, res) => {
+  console.log("[SSE] New connection initializing...");
   transport = new SSEServerTransport("/messages", res);
   await server.connect(transport);
+  console.log("[SSE] Connection established.");
 });
 
+// 3. The exact POST route for messages
 app.post("/messages", async (req, res) => {
+  console.log("[POST] Message received.");
   if (transport) {
     await transport.handlePostMessage(req, res, req.body);
   } else {
